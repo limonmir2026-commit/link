@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>লিংক শর্টনার - আপনার লিংক ছোট করুন</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Hind Siliguri', sans-serif;
+            background-color: #0f172a;
+        }
+
+        #particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes resultFadeIn {
+             from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        #main-card {
+            animation: fadeIn 0.8s ease-out forwards;
+        }
+
+        #result:not(.hidden) {
+            animation: resultFadeIn 0.5s ease-out forwards;
+        }
+        
+        .input-glow:focus {
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+        }
+
+    </style>
+</head>
+<body class="text-white flex items-center justify-center min-h-screen p-4 overflow-hidden">
+    
+    <canvas id="particle-canvas"></canvas>
+
+    <div id="main-card" class="w-full max-w-lg mx-auto p-6 md:p-8 bg-gray-900/70 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-700">
+        
+        <!-- Header Section -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-indigo-500">লিংক শর্টনার</h1>
+            <p class="text-gray-400 mt-2 text-md">যেকোনো বড় লিংক ছোট করে সোশ্যাল মিডিয়াতে শেয়ার করুন।</p>
+        </div>
+
+        <!-- Input Form -->
+        <div class="space-y-4">
+            <div>
+                <label for="longUrl" class="sr-only">আপনার লম্বা লিংকটি দিন</label>
+                <input type="url" id="longUrl" placeholder="আপনার লম্বা লিংকটি এখানে পেস্ট করুন..." class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300 input-glow">
+            </div>
+            <button id="shortenBtn" class="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-105 shadow-lg hover:shadow-blue-500/50">
+                <span id="btnText">লিংক শর্ট করুন</span>
+                <span id="btnSpinner" class="hidden">
+                    <svg class="animate-spin h-5 w-5 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </span>
+            </button>
+        </div>
+        
+        <!-- Error Message Display -->
+        <div id="errorMessage" class="hidden mt-4 text-center bg-red-900/50 border border-red-700 text-red-300 px-4 py-2 rounded-lg">
+        </div>
+
+        <!-- Result Display -->
+        <div id="result" class="hidden mt-6 bg-gray-800 p-4 rounded-lg border border-gray-700">
+            <p class="text-sm text-gray-400 mb-2">আপনার শর্ট লিংক:</p>
+            <div class="flex items-center justify-between space-x-3">
+                <input type="text" id="shortUrl" readonly class="w-full bg-transparent text-green-400 font-mono text-lg truncate focus:outline-none">
+                <button id="copyBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300 text-sm flex items-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    <span id="copyBtnText">কপি</span>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Start of Particle Background Script ---
+        const canvas = document.getElementById('particle-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let particlesArray;
+
+        // get mouse position
+        let mouse = {
+            x: null,
+            y: null,
+            radius: (canvas.height/110) * (canvas.width/110)
+        }
+
+        window.addEventListener('mousemove', 
+            function(event) {
+                mouse.x = event.x;
+                mouse.y = event.y;
+            }
+        );
+
+        // create particle
+        class Particle {
+            constructor(x, y, directionX, directionY, size, color) {
+                this.x = x;
+                this.y = y;
+                this.directionX = directionX;
+                this.directionY = directionY;
+                this.size = size;
+                this.color = color;
+            }
+            // method to draw individual particle
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2, false);
+                ctx.fillStyle = 'rgba(147, 197, 253, 0.4)';
+                ctx.fill();
+            }
+            // check particle position, mouse position, move the particle, draw the particle
+            update() {
+                // check if particle is still within canvas
+                if (this.x > canvas.width || this.x < 0) {
+                    this.directionX = -this.directionX;
+                }
+                if (this.y > canvas.height || this.y < 0) {
+                    this.directionY = -this.directionY;
+                }
+
+                this.x += this.directionX;
+                this.y += this.directionY;
+                this.draw();
+            }
+        }
+
+        // create particle array
+        function init() {
+            particlesArray = [];
+            let numberOfParticles = (canvas.height * canvas.width) / 9000;
+            for (let i = 0; i < numberOfParticles; i++) {
+                let size = (Math.random() * 2) + 1;
+                let x = (Math.random() * ((innerWidth - size * 2) - (size * 2)) + size * 2);
+                let y = (Math.random() * ((innerHeight - size * 2) - (size * 2)) + size * 2);
+                let directionX = (Math.random() * .4) - 0.2;
+                let directionY = (Math.random() * .4) - 0.2;
+                let color = 'rgba(147, 197, 253, 0.8)';
+
+                particlesArray.push(new Particle(x, y, directionX, directionY, size, color));
+            }
+        }
+
+        // animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            ctx.clearRect(0,0,innerWidth, innerHeight);
+
+            for (let i = 0; i < particlesArray.length; i++) {
+                particlesArray[i].update();
+            }
+            connect();
+        }
+
+        // check if particles are close enough to draw line between them
+        function connect(){
+            let opacityValue = 1;
+            for (let a = 0; a < particlesArray.length; a++) {
+                for (let b = a; b < particlesArray.length; b++) {
+                    let distance = ((particlesArray[a].x - particlesArray[b].x) * (particlesArray[a].x - particlesArray[b].x))
+                    + ((particlesArray[a].y - particlesArray[b].y) * (particlesArray[a].y - particlesArray[b].y));
+                    if (distance < (canvas.width/7) * (canvas.height/7)) {
+                        opacityValue = 1 - (distance/20000);
+                        ctx.strokeStyle='rgba(147, 197, 253,' + opacityValue + ')';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(particlesArray[a].x, particlesArray[a].y);
+                        ctx.lineTo(particlesArray[b].x, particlesArray[b].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+        
+        window.addEventListener('resize',
+            function(){
+                canvas.width = innerWidth;
+                canvas.height = innerHeight;
+                mouse.radius = ((canvas.height/110) * (canvas.height/110));
+                init();
+            }
+        );
+        
+        init();
+        animate();
+        // --- End of Particle Background Script ---
+
+
+        // --- Start of Link Shortener Script ---
+        const longUrlInput = document.getElementById('longUrl');
+        const shortenBtn = document.getElementById('shortenBtn');
+        const btnText = document.getElementById('btnText');
+        const btnSpinner = document.getElementById('btnSpinner');
+        const resultDiv = document.getElementById('result');
+        const shortUrlInput = document.getElementById('shortUrl');
+        const copyBtn = document.getElementById('copyBtn');
+        const copyBtnText = document.getElementById('copyBtnText');
+        const errorMessageDiv = document.getElementById('errorMessage');
+
+        function setLoading(isLoading) {
+            if (isLoading) {
+                btnText.classList.add('hidden');
+                btnSpinner.classList.remove('hidden');
+                shortenBtn.disabled = true;
+                shortenBtn.classList.add('cursor-not-allowed', 'opacity-70');
+            } else {
+                btnText.classList.remove('hidden');
+                btnSpinner.classList.add('hidden');
+                shortenBtn.disabled = false;
+                shortenBtn.classList.remove('cursor-not-allowed', 'opacity-70');
+            }
+        }
+
+        function showError(message) {
+            errorMessageDiv.textContent = message;
+            errorMessageDiv.classList.remove('hidden');
+            resultDiv.classList.add('hidden');
+        }
+
+        function hideError() {
+            errorMessageDiv.classList.add('hidden');
+        }
+
+        shortenBtn.addEventListener('click', async () => {
+            const longUrl = longUrlInput.value.trim();
+            hideError();
+            resultDiv.classList.add('hidden'); 
+
+            if (!longUrl) {
+                showError('অনুগ্রহ করে একটি লিংক দিন।');
+                return;
+            }
+            try {
+                new URL(longUrl);
+            } catch (_) {
+                showError('অনুগ্রহ করে একটি সঠিক লিংক দিন (যেমন: https://example.com)।');
+                return;
+            }
+
+            setLoading(true);
+            
+            const apiUrl = `https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`;
+            
+            try {
+                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                const response = await fetch(proxyUrl + encodeURIComponent(apiUrl));
+
+                if (response.ok) {
+                    const shortUrl = await response.text();
+                    if (shortUrl && !shortUrl.toLowerCase().includes('error')) {
+                        shortUrlInput.value = shortUrl;
+                        resultDiv.classList.remove('hidden');
+                        copyBtnText.textContent = 'কপি';
+                        copyBtn.classList.remove('bg-gray-500');
+                        copyBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                    } else {
+                        throw new Error(shortUrl || 'একটি অজানা ত্রুটি হয়েছে।');
+                    }
+                } else {
+                    throw new Error(`সার্ভার থেকে সাড়া পাওয়া যায়নি: ${response.statusText}`);
+                }
+            } catch (error) {
+                showError(error.message || 'একটি অজানা সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।');
+            } finally {
+                setLoading(false);
+            }
+        });
+        
+        longUrlInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+                shortenBtn.click();
+            }
+        });
+
+        copyBtn.addEventListener('click', () => {
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = shortUrlInput.value;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            tempTextArea.setSelectionRange(0, 99999); 
+
+            try {
+                document.execCommand('copy');
+                copyBtnText.textContent = 'কপি হয়েছে!';
+                copyBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                copyBtn.classList.add('bg-gray-500');
+                
+                setTimeout(() => {
+                    copyBtnText.textContent = 'কপি';
+                    copyBtn.classList.remove('bg-gray-500');
+                    copyBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                }, 2000);
+
+            } catch (err) {
+                showError('কপি করতে সমস্যা হয়েছে।');
+            }
+
+            document.body.removeChild(tempTextArea);
+        });
+        // --- End of Link Shortener Script ---
+    </script>
+</body>
+</html>
+
